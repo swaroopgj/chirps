@@ -6,7 +6,6 @@ test_size = 1000
 beta = 0.0001
 tf.reset_default_graph()
 
-
 def prep_data(mfcc=False, logamp=True, seed=1024):
     import cPickle as pickle
     data_fn = 'song_data_mfcc.pkl' if mfcc else 'song_data_melspec.pkl'
@@ -149,18 +148,24 @@ def model(x, w_conv1, b_conv1, w_conv2, b_conv2, w_conv3, b_conv3, w_fc1, b_fc1,
 
 
 if __name__ == "__main__":
-    X = tf.placeholder("float", [None, 64, 200, 1])
-    Y = tf.placeholder("float", [None, 2])
+    mfcc = True
+    training = False
 
+    if mfcc:
+        X = tf.placeholder("float", [None, 20, 200, 1])
+    else:
+        X = tf.placeholder("float", [None, 64, 200, 1])
+    Y = tf.placeholder("float", [None, 2])
     w_conv1 = weight_variable(shape=[3, 3, 1, 32])
     b_conv1 = bias_variable([32])
     w_conv2 = weight_variable(shape=[3, 3, 32, 64])
     b_conv2 = bias_variable([64])
     w_conv3 = weight_variable(shape=[3, 3, 64, 128])
     b_conv3 = bias_variable([128])
-    w_conv3 = weight_variable(shape=[3, 3, 64, 128])
-    b_conv3 = bias_variable([128])
-    w_fc1 = weight_variable(shape=[8*8*128, 512])
+    if mfcc:
+        w_fc1 = weight_variable(shape=[3 * 8 * 128, 512])
+    else:
+        w_fc1 = weight_variable(shape=[8 * 8 * 128, 512])
     b_fc1 = bias_variable([512])
     w_fc2 = weight_variable(shape=[512, 2])
     b_fc2 = bias_variable([2])
@@ -176,15 +181,12 @@ if __name__ == "__main__":
 
     cost = cost_softmax + beta*cost_l2
 
-    train_op = tf.train.RMSPropOptimizer(0.001, 0.9).minimize(cost)  # init_lr=0.0001
+    train_op = tf.train.RMSPropOptimizer(0.001, 0.9).minimize(cost)
     predict_op = tf.argmax(py_x, 1)
 
-    training = False
     if training:
-        # Launch the graph in a session
         cv_accs = []
         loss_func = []
-        # you need to initialize all variables
         saver = tf.train.Saver(max_to_keep=20)
         sess = tf.Session()
         sess.run(tf.initialize_all_variables())
@@ -203,34 +205,30 @@ if __name__ == "__main__":
                                                    p_keep_conv: 0.5, p_keep_hidden: 0.5})
                 loss_epoch.append(loss_iter)
             loss_func.append(np.mean(loss_epoch))
-            #test_indices = np.arange(len(teX))  # Get A Test Batch
-            #np.random.shuffle(test_indices)
-            #test_indices = test_indices[0:test_size]
-
             test_accuracy = np.mean(np.argmax(teY, axis=1) ==
                                     sess.run(predict_op, feed_dict={X: teX,
                                                                     p_keep_conv: 1.0,
                                                                     p_keep_hidden: 1.0}))
             print(i, loss_func[-1], test_accuracy)
-            if test_accuracy > 0.855:
+            if test_accuracy > 0.875 & loss_func[-1] < 0.345:
                 saver.save(sess, './melspecmodels/melspec_model1', global_step=saved_model_counter)
                 print("saved model %d: %f" % (saved_model_counter, test_accuracy))
                 saved_model_counter += 1
-
+                break;
             cv_accs.append(test_accuracy)
-
-        #saver.save(sess, 'cnn_melspec_model0')
     # Restore sess
     testing = True
     model_fname = 'melspecmodels/saved/melspec_model1-33'
+    sub_fname = 'sub1_melspecmodel1-33.csv'
     if testing:
         sess = tf.Session()
-        # sess.run(tf.initialize_all_variables())
-        # new_saver = tf.train.import_meta_graph('mfccmodels/cnn_melspec_model0.meta')
         new_saver = tf.train.Saver()
         new_saver.restore(sess, model_fname)
-        testX, fnames = prep_test_data(mfcc=False)
-        testX = testX.reshape(-1, 64, 200, 1)
+        testX, fnames = prep_test_data(mfcc=mfcc)
+        if mfcc:
+            testX = testX.reshape(-1, 20, 200, 1)
+        else:
+            testX = testX.reshape(-1, 64, 200, 1)
         logits = np.asarray([sess.run(py_x,
                                       feed_dict={X: testX[i, ][None, ], p_keep_conv: 1.0,
                                                  p_keep_hidden: 1.0})
@@ -249,29 +247,6 @@ if __name__ == "__main__":
                 final_probs[final_fnames.index(f)] = max(final_probs[final_fnames.index(f)],
                                                          test_probs[i])
         final_probs = np.array(final_probs)
-        '''
-        with open('sub1_melspecmodel1-33.csv','w') as subfile:
+        with open(sub_fname,'w') as subfile:
             for i in range(len(final_fnames)):
                 subfile.write("%s,%f\n"%(final_fnames[i].split('.wav')[0], final_probs[i]))
-        '''
-
-    # Restore sess
-    '''
-    sess = tf.Session()
-    sess.run(tf.initialize_all_variables())
-    new_saver = tf.train.import_meta_graph('melspecmodels/cnn_melspec_model0.meta')
-    new_saver.restore(sess, tf.train.latest_checkpoint('./melspecmodels/'))
-
-    teX, fnames = prep_test_data()
-    teX = teX.reshape(-1, 64, 200, 1)
-    logits = np.asarray([sess.run(py_x, feed_dict={X: teX[i,][None,], p_keep_conv: 1.0, p_keep_hidden: 1.0})
-                for i in range(len(teX))]).squeeze()
-    probs = tf.nn.softmax(logits)
-    test_probs = sess.run(probs)
-    with open('sub1.csv','w') as subfile:
-        for i in range(len(fnames)):
-            subfile.write("%s,%f\n"%(fnames[i].split('.wav')[0], test_probs[i,1]))
-
-    '''
-    #np.save('birds_test_run_accs.npy', cv_accs)
-    #np.save('birds_test_run_loss.npy', loss_func)

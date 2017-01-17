@@ -4,7 +4,6 @@ import cPickle as pickle
 
 def features(filename, mels=False, logamp=False, n_mfcc=128):
     y, sr = librosa.load(filename, sr=22050)
-    #librosa.feature.chroma_cqt(y, sr, fmin=20, n_chroma=12, n_octaves=9)
     # 128x217
     if mels:
         S = librosa.feature.mfcc(y, n_mels=128, sr=sr, n_mfcc=n_mfcc, hop_length=1024, n_fft=1024*4,
