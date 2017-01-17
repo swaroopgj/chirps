@@ -9,7 +9,7 @@ For MFCCs, we used 20 coefficients sampled at ~20Hz. This gave us 20x200 feature
 a 10s clip after clipping the first 5 samples and keeping 200 for 10s clip.
 
 For spectrum, we use power in high frequency range from approximately 1500-10000Hz at
-~20Hz sampling rate. T
+~20Hz sampling rate.
 
 ## Learning algorithm
 We used a convolution neural network (CNN) coded in tensorflow with 3 convolution layers and 2
